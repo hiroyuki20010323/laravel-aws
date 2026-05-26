@@ -1,0 +1,52 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync
+        env:
+          DEPLOY_HOST: ${{ secrets.STAGING_HOST }}
+          DEPLOY_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='storage/logs' \
+            --exclude='node_modules' \
+            ./ ${DEPLOY_USER}@${DEPLOY_HOST}:/var/www/laravel
+
+      - name: Run post-deploy commands on EC2
+        env:
+          DEPLOY_HOST: ${{ secrets.STAGING_HOST }}
+          DEPLOY_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} bash -s <<'EOF'
+            set -e
+            cd /var/www/laravel
+            composer install --no-dev --optimize-autoloader
+            bash scripts/generate-env.sh
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            sudo chown -R ec2-user:apache storage bootstrap/cache
+            sudo chmod -R 775 storage bootstrap/cache
+            sudo systemctl reload php-fpm
+            sudo systemctl reload nginx
+          EOF
