@@ -10,6 +10,7 @@ DB_USERNAME=$(aws ssm get-parameter --name "/laravel/production/db_username" --r
 DB_PASSWORD=$(aws ssm get-parameter --name "/laravel/production/db_password" --with-decryption --region $REGION --query "Parameter.Value" --output text)
 APP_KEY=$(aws ssm get-parameter --name "/laravel/production/app_key" --with-decryption --region $REGION --query "Parameter.Value" --output text)
 APP_URL=$(aws ssm get-parameter --name "/laravel/production/app_url" --region $REGION --query "Parameter.Value" --output text)
+AWS_BUCKET=$(aws ssm get-parameter --name "/laravel/production/aws_bucket" --region $REGION --query "Parameter.Value" --output text)
 
 cat > "$APP_DIR/.env" <<EOF
 APP_NAME=Laravel
@@ -17,6 +18,9 @@ APP_ENV=production
 APP_KEY=${APP_KEY}
 APP_DEBUG=false
 APP_URL=${APP_URL}
+AWS_DEFAULT_REGION=${REGION}
+AWS_BUCKET=${AWS_BUCKET}
+FILESYSTEM_DISK=s3
 
 LOG_CHANNEL=stack
 LOG_LEVEL=info
